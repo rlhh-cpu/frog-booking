@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>青蛙軍團生態導覽預約系統</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
+        body { font-family: 'Noto Sans TC', sans-serif; }
+        @media print {
+            .print\:hidden { display: none !important; }
+            .print\:block { display: block !important; }
+            .print\:border-black { border-color: black !important; }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+    <div id="root"></div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, query, onSnapshot, addDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        window.FirebaseApp = { initializeApp };
+        window.FirebaseAuth = { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged };
+        window.FirebaseFirestore = { getFirestore, doc, setDoc, getDoc, collection, query, onSnapshot, addDoc, updateDoc, deleteDoc };
+        
+        window.dispatchEvent(new Event('firebase-ready'));
+    </script>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
+
+        /**
+         * 修正後的 Icon 組件
+         * 使用內聯 SVG 路徑，並正確包裹相鄰的 JSX 元素
+         */
+        const Icon = ({ name, size = 20, className = "" }) => {
+            const icons = {
+                "calendar": <path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" />,
+                "settings": (
+                    <>
+                        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+                        <circle cx="12" cy="12" r="3"/>
+                    </>
+                ),
+                "lock": (
+                    <>
+                        <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                    </>
+                ),
+                "check-circle": (
+                    <>
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                        <polyline points="22 4 12 14.01 9 11.01"/>
+                    </>
+                ),
+                "alert-circle": (
+                    <>
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="12" x2="12" y1="8" y2="12"/>
+                        <line x1="12" x2="12.01" y1="16" y2="16"/>
+                    </>
+                ),
+                "download": (
+                    <>
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" x2="12" y1="15" y2="3"/>
+                    </>
+                ),
+                "printer": (
+                    <>
+                        <polyline points="6 9 6 2 18 2 18 9"/>
+                        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+                        <rect width="12" height="8" x="6" y="14"/>
+                    </>
+                ),
+                "clock": (
+                    <>
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12 6 12 12 16 14"/>
+                    </>
+                ),
+                "user-check": (
+                    <>
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                        <circle cx="9" cy="7" r="4"/>
+                        <polyline points="16 11 18 13 22 9"/>
+                    </>
+                ),
+                "trash-2": (
+                    <>
+                        <path d="M3 6h18"/>
+                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+                        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                        <line x1="10" x2="10" y1="11" y2="17"/>
+                        <line x1="14" x2="14" y1="11" y2="17"/>
+                    </>
+                )
+            };
+
+            return (
+                <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width={size}
+                    height={size}
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className={`lucide-icon ${className}`}
+                >
+                    {icons[name] || null}
+                </svg>
+            );
+        };
+
+        function App() {
+            const [isReady, setIsReady] = useState(false);
+            const [user, setUser] = useState(null);
+            const [view, setView] = useState('user');
+            const [systemOpen, setSystemOpen] = useState(true);
+            const [showPasswordModal, setShowPasswordModal] = useState(false);
+            const [adminPass, setAdminPass] = useState('');
+            const [loginError, setLoginError] = useState(false);
+            
+            const getTodayStr = () => new Date().toISOString().split('T')[0];
+            const [selectedDateAdmin, setSelectedDateAdmin] = useState(getTodayStr());
+
+            const [bookings, setBookings] = useState([]);
+            const [dailySettings, setDailySettings] = useState({
+                default: { maxCapacity: 85, slots: ['18:30', '20:00'] }
+            });
+
+            useEffect(() => {
+                const handleReady = () => setIsReady(true);
+                if (window.FirebaseFirestore) setIsReady(true);
+                else window.addEventListener('firebase-ready', handleReady);
+                return () => window.removeEventListener('firebase-ready', handleReady);
+            }, []);
+
+            const firebaseObjects = useMemo(() => {
+                if (!isReady) return null;
+                const config = typeof __firebase_config !== 'undefined' 
+                    ? JSON.parse(__firebase_config) 
+                    : { apiKey: "", authDomain: "", projectId: "", storageBucket: "", messagingSenderId: "", appId: "" };
+
+                const app = window.FirebaseApp.initializeApp(config);
+                const auth = window.FirebaseAuth.getAuth(app);
+                const db = window.FirebaseFirestore.getFirestore(app);
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'frog-booking-html';
+
+                return { auth, db, appId };
+            }, [isReady]);
+
+            useEffect(() => {
+                if (!firebaseObjects) return;
+                const { auth } = firebaseObjects;
+                const { signInAnonymously, signInWithCustomToken, onAuthStateChanged } = window.FirebaseAuth;
+
+                const initAuth = async () => {
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            await signInWithCustomToken(auth, __initial_auth_token);
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                    } catch (err) {
+                        console.error("Auth Error:", err);
+                    }
+                };
+                initAuth();
+                const unsubscribe = onAuthStateChanged(auth, setUser);
+                return () => unsubscribe();
+            }, [firebaseObjects]);
+
+            useEffect(() => {
+                if (!user || !firebaseObjects) return;
+                const { db, appId } = firebaseObjects;
+                const { collection, doc, onSnapshot } = window.FirebaseFirestore;
+
+                const bookingsCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'bookings');
+                const settingsDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config');
+
+                const unsubscribeBookings = onSnapshot(bookingsCollectionRef, (snapshot) => {
+                    const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    setBookings(data);
+                }, (error) => console.error("Bookings Sync Error:", error));
+
+                const unsubscribeSettings = onSnapshot(settingsDocRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        if (data.dailySettings) setDailySettings(data.dailySettings);
+                        if (data.systemOpen !== undefined) setSystemOpen(data.systemOpen);
+                    }
+                }, (error) => console.error("Settings Sync Error:", error));
+
+                return () => {
+                    unsubscribeBookings();
+                    unsubscribeSettings();
+                };
+            }, [user, firebaseObjects]);
+
+            const [formData, setFormData] = useState({
+                name: '', title: '先生', adults: 1, kids: 0, phone: '', email: '', date: getTodayStr(), time: ''
+            });
+            const [showSuccess, setShowSuccess] = useState(false);
+            const [isCheckInModalOpen, setIsCheckInModalOpen] = useState(false);
+            const [checkInData, setCheckInData] = useState(null);
+            const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, bookingId: null });
+
+            const getStatsForDate = (dateStr) => {
+                const dayBookings = bookings.filter(b => b.date === dateStr);
+                const settings = dailySettings[dateStr] || dailySettings.default;
+                const countBySlot = (settings.slots || []).reduce((acc, slot) => {
+                    const slotBookings = dayBookings.filter(b => b.time === slot);
+                    acc[slot] = slotBookings.reduce((sum, b) => sum + (Number(b.adults) || 0) + (Number(b.kids) || 0), 0);
+                    return acc;
+                }, {});
+                return { 
+                    total: dayBookings.reduce((sum, b) => sum + (Number(b.adults) || 0) + (Number(b.kids) || 0), 0), 
+                    countBySlot, 
+                    list: dayBookings, 
+                    settings 
+                };
+            };
+
+            const currentDayStats = useMemo(() => getStatsForDate(formData.date), [formData.date, bookings, dailySettings]);
+            const adminDateStats = useMemo(() => getStatsForDate(selectedDateAdmin), [selectedDateAdmin, bookings, dailySettings]);
+
+            const groupedBookings = useMemo(() => {
+                const { settings, list } = adminDateStats;
+                return (settings.slots || []).map(slot => ({ slot, list: list.filter(b => b.time === slot) }));
+            }, [adminDateStats]);
+
+            const handleUserSubmit = async (e) => {
+                e.preventDefault();
+                if (!systemOpen || !user || !firebaseObjects) return;
+                const { db, appId } = firebaseObjects;
+                const { collection, addDoc } = window.FirebaseFirestore;
+                const bookingsCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'bookings');
+
+                const currentCount = currentDayStats.countBySlot[formData.time] || 0;
+                if ((currentCount + formData.adults + formData.kids) > currentDayStats.settings.maxCapacity) {
+                    alert(`該梯次名額不足！`);
+                    return;
+                }
+
+                try {
+                    await addDoc(bookingsCollectionRef, { 
+                        ...formData, 
+                        adults: Number(formData.adults), 
+                        kids: Number(formData.kids), 
+                        attended: false, 
+                        createdAt: new Date().toISOString() 
+                    });
+                    setShowSuccess(true);
+                    setFormData({ ...formData, name: '', phone: '', email: '', time: '' });
+                    setTimeout(() => setShowSuccess(false), 3000);
+                } catch (err) { console.error(err); }
+            };
+
+            const handleAdminAccess = () => {
+                if (view.startsWith('admin')) setView('user');
+                else { setShowPasswordModal(true); setAdminPass(''); setLoginError(false); }
+            };
+
+            const verifyPassword = (e) => {
+                e.preventDefault();
+                if (adminPass === '8410') { setView('admin-bookings'); setShowPasswordModal(false); }
+                else setLoginError(true);
+            };
+
+            const toggleSystem = async () => {
+                if (!firebaseObjects) return;
+                const { db, appId } = firebaseObjects;
+                const { doc, setDoc } = window.FirebaseFirestore;
+                const settingsDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config');
+
+                const newState = !systemOpen;
+                setSystemOpen(newState);
+                await setDoc(settingsDocRef, { systemOpen: newState }, { merge: true });
+            };
+
+            const confirmCheckIn = async (e) => {
+                e.preventDefault();
+                if (!firebaseObjects) return;
+                const { db, appId } = firebaseObjects;
+                const { doc, updateDoc } = window.FirebaseFirestore;
+                
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'bookings', checkInData.id), {
+                    attended: true,
+                    actualAdults: Number(checkInData.actualAdults),
+                    actualKids: Number(checkInData.actualKids)
+                });
+                setIsCheckInModalOpen(false);
+            };
+
+            const deleteBooking = async () => {
+                if (!firebaseObjects) return;
+                const { db, appId } = firebaseObjects;
+                const { doc, deleteDoc } = window.FirebaseFirestore;
+
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'bookings', deleteConfirm.bookingId));
+                setDeleteConfirm({ isOpen: false, bookingId: null });
+            };
+
+            const exportCSV = () => {
+                const headers = ["日期", "時間", "姓名", "大人", "小孩", "電話", "狀態"];
+                const rows = adminDateStats.list.map(b => [b.date, b.time, b.name, b.adults, b.kids, b.phone, b.attended ? "已報到" : "未報到"]);
+                const content = "\uFEFF" + [headers, ...rows].map(e => e.join(",")).join("\n");
+                const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement("a");
+                link.href = URL.createObjectURL(blob);
+                link.download = `預約_${selectedDateAdmin}.csv`;
+                link.click();
+            };
+
+            if (!isReady) {
+                return (
+                    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                        <div className="flex flex-col items-center gap-4">
+                            <div className="w-10 h-10 border-4 border-green-500 border-t-transparent rounded-full animate-spin"></div>
+                            <p className="text-gray-500 font-bold">系統初始化中...</p>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen flex flex-col">
+                    <div className="hidden print:block text-center p-4 border-b-2 border-black mb-4">
+                        <h1 className="text-2xl font-bold">青蛙軍團生態導覽預約表</h1>
+                        <p>日期：{selectedDateAdmin} | 總計：{adminDateStats.total} 位</p>
+                    </div>
+
+                    <nav className="bg-white border-b h-16 flex items-center justify-between px-6 sticky top-0 z-40 print:hidden">
+                        <div className="flex items-center gap-2 text-green-600 font-bold text-xl">
+                            <div className="bg-green-600 text-white w-8 h-8 rounded flex items-center justify-center">蛙</div>
+                            <span>預約系統</span>
+                        </div>
+                        <div className="flex bg-gray-100 p-1 rounded-lg">
+                            <button onClick={() => setView('user')} className={`px-4 py-1.5 rounded-md text-sm ${view === 'user' ? 'bg-white shadow text-green-700 font-bold' : 'text-gray-500'}`}>前台</button>
+                            <button onClick={handleAdminAccess} className={`px-4 py-1.5 rounded-md text-sm flex items-center gap-1 ${view.startsWith('admin') ? 'bg-white shadow text-green-700 font-bold' : 'text-gray-500'}`}>
+                                <Icon name={view.startsWith('admin') ? "settings" : "lock"} size={16} /> 管理
+                            </button>
+                        </div>
+                    </nav>
+
+                    <main className="flex-1 max-w-6xl mx-auto w-full p-4 md:p-8">
+                        {view === 'user' ? (
+                            <div className="max-w-xl mx-auto space-y-6">
+                                <div className="bg-green-700 rounded-3xl p-8 text-white shadow-xl relative overflow-hidden">
+                                    <h1 className="text-3xl font-bold mb-2">生態導覽報名</h1>
+                                    <p className="opacity-80">探索大自然的奧秘，從預約開始。</p>
+                                    <Icon name="calendar" size={120} className="absolute -right-8 -bottom-8 opacity-10 rotate-12 text-white" />
+                                </div>
+
+                                {showSuccess && (
+                                    <div className="bg-green-100 border border-green-200 text-green-700 p-4 rounded-xl flex items-center gap-2 animate-bounce">
+                                        <Icon name="check-circle" /> 預約成功！期待您的光臨。
+                                    </div>
+                                )}
+
+                                {!systemOpen ? (
+                                    <div className="bg-white border rounded-3xl p-12 text-center shadow-sm">
+                                        <Icon name="alert-circle" size={48} className="mx-auto text-orange-400 mb-4" />
+                                        <h2 className="text-xl font-bold">目前暫停預約</h2>
+                                        <p className="text-gray-400 mt-2">請稍後再試或聯繫管理員。</p>
+                                    </div>
+                                ) : (
+                                    <div className="bg-white border rounded-3xl p-6 md:p-10 shadow-sm">
+                                        <form onSubmit={handleUserSubmit} className="space-y-6">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="block text-sm font-bold mb-2">預約日期</label>
+                                                    <input required type="date" min={getTodayStr()} className="w-full border-2 border-gray-100 rounded-xl p-3 focus:border-green-500 outline-none" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value, time: ''})} />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-bold mb-2">選擇梯次</label>
+                                                    <select required className="w-full border-2 border-gray-100 rounded-xl p-3 focus:border-green-500 outline-none" value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})}>
+                                                        <option value="">請選擇</option>
+                                                        {currentDayStats.settings.slots.map(s => (
+                                                            <option key={s} value={s} disabled={(currentDayStats.countBySlot[s] || 0) >= currentDayStats.settings.maxCapacity}>
+                                                                {s} (剩餘 {currentDayStats.settings.maxCapacity - (currentDayStats.countBySlot[s] || 0)})
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-4 gap-4">
+                                                <div className="col-span-3">
+                                                    <label className="block text-sm font-bold mb-2">姓名</label>
+                                                    <input required type="text" className="w-full border-2 border-gray-100 rounded-xl p-3 outline-none focus:border-green-500" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                                                </div>
+                                                <div className="col-span-1">
+                                                    <label className="block text-sm font-bold mb-2">稱謂</label>
+                                                    <select className="w-full border-2 border-gray-100 rounded-xl p-3 outline-none" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})}>
+                                                        <option>先生</option><option>小姐</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="block text-sm font-bold mb-2">大人</label>
+                                                    <input required type="number" min="1" className="w-full border-2 border-gray-100 rounded-xl p-3 outline-none" value={formData.adults} onChange={e => setFormData({...formData, adults: parseInt(e.target.value) || 0})} />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-bold mb-2">小孩</label>
+                                                    <input required type="number" min="0" className="w-full border-2 border-gray-100 rounded-xl p-3 outline-none" value={formData.kids} onChange={e => setFormData({...formData, kids: parseInt(e.target.value) || 0})} />
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-bold mb-2">聯絡電話</label>
+                                                <input required type="tel" className="w-full border-2 border-gray-100 rounded-xl p-3 outline-none focus:border-green-500" placeholder="09xx-xxx-xxx" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
+                                            </div>
+
+                                            <button type="submit" className="w-full bg-green-600 text-white py-4 rounded-2xl font-bold shadow-lg hover:bg-green-700 transition-transform active:scale-95">送出預約</button>
+                                        </form>
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                <aside className="space-y-4 print:hidden">
+                                    <div className="bg-white border rounded-2xl p-6 shadow-sm">
+                                        <h3 className="font-bold mb-4 flex items-center gap-2"><Icon name="calendar" className="text-green-600" /> 管理日期</h3>
+                                        <input type="date" className="w-full border-2 border-gray-100 rounded-xl p-3 outline-none focus:border-green-500 font-bold" value={selectedDateAdmin} onChange={e => setSelectedDateAdmin(e.target.value)} />
+                                    </div>
+                                    <div className="bg-white border rounded-2xl p-6 shadow-sm flex items-center justify-between">
+                                        <span className="font-bold">預約開關</span>
+                                        <button onClick={toggleSystem} className={`w-12 h-6 rounded-full relative transition-colors ${systemOpen ? 'bg-green-500' : 'bg-gray-300'}`}>
+                                            <div className={`absolute top-1 bg-white w-4 h-4 rounded-full transition-all ${systemOpen ? 'left-7' : 'left-1'}`} />
+                                        </button>
+                                    </div>
+                                    <button onClick={exportCSV} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2"><Icon name="download" size={18} /> 導出 CSV</button>
+                                    <button onClick={() => window.print()} className="w-full bg-gray-100 text-gray-700 py-3 rounded-xl font-bold flex items-center justify-center gap-2"><Icon name="printer" size={18} /> 列印表格</button>
+                                </aside>
+
+                                <div className="lg:col-span-2 space-y-6">
+                                    {groupedBookings.map(({ slot, list }) => (
+                                        <div key={slot} className="bg-white border rounded-2xl shadow-sm overflow-hidden break-inside-avoid print:border-black">
+                                            <div className="bg-gray-50 px-6 py-3 border-b flex justify-between items-center print:bg-white">
+                                                <div className="font-bold flex items-center gap-2"><Icon name="clock" size={16} className="text-green-600" /> {slot}</div>
+                                                <span className="text-sm font-bold text-gray-400">總計 {list.reduce((s, b) => s + (b.adults + b.kids), 0)} 位</span>
+                                            </div>
+                                            <table className="w-full text-left">
+                                                <thead>
+                                                    <tr className="text-xs font-bold text-gray-400 border-b">
+                                                        <th className="px-6 py-3">姓名</th>
+                                                        <th className="px-6 py-3">人數</th>
+                                                        <th className="px-6 py-3 print:hidden">電話</th>
+                                                        <th className="px-6 py-3 text-right print:hidden">操作</th>
+                                                        <th className="px-6 py-3 hidden print:table-cell">備註</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y">
+                                                    {list.map(b => (
+                                                        <tr key={b.id} className={b.attended ? 'bg-green-50/50' : ''}>
+                                                            <td className="px-6 py-4 font-bold">{b.name} <span className="text-xs text-gray-400">{b.title}</span></td>
+                                                            <td className="px-6 py-4 text-sm">大:{b.adults} 小:{b.kids}</td>
+                                                            <td className="px-6 py-4 text-sm print:hidden">{b.phone}</td>
+                                                            <td className="px-6 py-4 text-right print:hidden">
+                                                                <div className="flex justify-end gap-2">
+                                                                    {!b.attended && <button onClick={() => { setCheckInData({...b, actualAdults: b.adults, actualKids: b.kids}); setIsCheckInModalOpen(true); }} className="text-green-600 hover:bg-green-50 p-2 rounded-lg"><Icon name="user-check" size={18} /></button>}
+                                                                    <button onClick={() => setDeleteConfirm({ isOpen: true, bookingId: b.id })} className="text-red-400 hover:bg-red-50 p-2 rounded-lg"><Icon name="trash-2" size={18} /></button>
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-6 py-4 hidden print:table-cell border-l w-24"></td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </main>
+
+                    {showPasswordModal && (
+                        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                            <div className="bg-white rounded-3xl p-8 w-full max-sm shadow-2xl">
+                                <h2 className="text-2xl font-bold text-center mb-6">管理登入</h2>
+                                <form onSubmit={verifyPassword} className="space-y-4">
+                                    <input autoFocus type="password" placeholder="輸入密碼" className={`w-full border-2 rounded-xl p-4 outline-none ${loginError ? 'border-red-500' : 'border-gray-100'}`} value={adminPass} onChange={e => setAdminPass(e.target.value)} />
+                                    {loginError && <p className="text-red-500 text-xs text-center">密碼錯誤</p>}
+                                    <button type="submit" className="w-full bg-green-600 text-white py-4 rounded-xl font-bold">確認</button>
+                                    <button type="button" onClick={() => setShowPasswordModal(false)} className="w-full text-gray-400 text-sm">取消</button>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+
+                    {isCheckInModalOpen && checkInData && (
+                        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                            <div className="bg-white rounded-3xl p-6 w-full max-w-sm">
+                                <h3 className="text-xl font-bold mb-4">確認報到人數</h3>
+                                <form onSubmit={confirmCheckIn} className="space-y-4">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div><label className="text-xs text-gray-400">大人</label><input type="number" className="w-full border rounded-lg p-2" value={checkInData.actualAdults} onChange={e => setCheckInData({...checkInData, actualAdults: e.target.value})} /></div>
+                                        <div><label className="text-xs text-gray-400">小孩</label><input type="number" className="w-full border rounded-lg p-2" value={checkInData.actualKids} onChange={e => setCheckInData({...checkInData, actualKids: e.target.value})} /></div>
+                                    </div>
+                                    <button type="submit" className="w-full bg-green-600 text-white py-3 rounded-xl font-bold">確認報到</button>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+
+                    {deleteConfirm.isOpen && (
+                        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
+                            <div className="bg-white rounded-2xl p-6 max-w-xs w-full text-center">
+                                <h3 className="font-bold text-lg mb-4">確定要刪除預約？</h3>
+                                <div className="flex gap-2">
+                                    <button onClick={() => setDeleteConfirm({isOpen:false})} className="flex-1 py-2 text-gray-500">取消</button>
+                                    <button onClick={deleteBooking} className="flex-1 py-2 bg-red-500 text-white rounded-lg">確定</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <footer className="py-8 text-center text-gray-400 text-xs border-t mt-auto print:hidden">
+                        <p>©  瑞奇活力館青蛙軍團生態導覽</p>
+                    </footer>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
